@@ -1,0 +1,122 @@
+#---------------------------------------------------------------------------------#
+#Time Scales Available:
+#ideal_time_scale   ###argumet: NONE
+#calibration_time_scale   #### argument: parameter   ### Scale Parameter required
+#proportional_hazards_time_scale   ### argument: variable
+#log_linear_time_scale   ###argument: NONE
+#power_time_scale   ###argument:parameter   ### Shape Parameter Required
+#---------------------------------------------------------------------------------#
+nepal_data <- time_scaled_data(nep_data, 
+                               mag.cutoff = 5, 
+                               ideal_time_scale)
+  
+  
+nep_data$time[which.max(nep_data$mag)]  
+#require("PtProcess")
+dmagn_mark <- function(x, data, params){
+  #  Gamma distribution
+  #  exponential density when params[7]=0
+  if (params[7]>0){
+    lambda <- etas_gif(data, x[,"time"], params=params[1:5])
+    y <- dgamma(x[,"magnitude"], shape=1+sqrt(lambda)*params[7],
+                rate=params[6], log=TRUE)
+  } else y <- dexp(x[,"magnitude"], rate=params[6], log=TRUE)
+  return(y)
+}
+
+
+rmagn_mark <- function(ti, data, params){
+  #  Gamma distribution
+  #  exponential density when params[7]=0
+  if (params[7]>0){
+    lambda <- etas_gif(data, ti, params=params[1:5])
+    y <- rgamma(1, shape=1+sqrt(lambda)*params[7],
+                rate=params[6])
+  } else y <- rexp(1, rate=params[6])
+  return(list(magnitude=y))
+}
+
+
+TT <- c(0, max(nepal_data$time))
+params <- c(0.001, 0.128, 1.972, 0.46, 1.267, 1/mean(nepal_data$magnitude), 0)
+
+x <-mpp(data=nepal_data, gif=etas_gif,
+        mark=list(dmagn_mark, rmagn_mark),
+        params=params, TT=TT,
+        gmap=expression(params[1:5]),
+        mmap=expression(params))
+
+#----------------------------------------------------------
+#    Fit Model with Exponential Magnitude Distribution
+
+
+expmap <- function(y, p){
+  #   for exponential distribution
+  y$params[1:5] <- exp(p)
+  return(y)
+}
+
+initial <- log(params[1:5])
+z <- optim(initial, neglogLik, object = x, pmap=expmap,
+           control=list(trace = 1, maxit = 100))
+
+
+initial <- z$par
+z <- nlm(neglogLik, initial, object = x,
+         pmap=expmap, print.level=2, iterlim=500, typsize=initial)
+
+#    write estimates to a new model object x0
+x0 <- expmap(x, z$estimate)
+
+print(logLik(x0))
+
+
+#----------------------------------------------------------
+#    Fit Model with Gamma Magnitude Distribution
+
+
+length(x$params)
+allmap <- function(y, p){
+  y$params <- exp(p)
+  return(y)
+}
+
+am<-function(p){
+  return(exp(p))
+}
+
+
+initial <- log(c(x$params[1:6], 0.1))
+z <- optim(initial, control = list(trace=1, maxit=200), neglogLik, object=x, pmap=allmap)
+
+#neglogLik(initial, x)
+
+initial <- z$par
+z <- nlm(neglogLik, initial, object=x, pmap=allmap,
+         print.level=2, iterlim=500, typsize=initial)
+
+#    write estimates to a new model object x1
+x1 <- allmap(x, z$estimate)
+
+print(logLik(x1))
+
+
+#----------------------------------------------------------
+#    Print Summary of Both Models
+
+
+print(summary(x0))
+print(summary(x1))
+
+
+#----------------------------------------------------------
+#    Table of Parameter Estimates
+
+
+param.est <- rbind(cbind(x0$params, x1$params), c(logLik(x0), logLik(x1)))
+colnames(param.est) <- c("Exp Model", "Gamma Model")
+rownames(param.est) <- c("p1=mu", "p2=A", "p3=alpha", "p4=c", "p5=p", "p6", "p7", "logLik")
+
+print(param.est)
+
+#-----------------------------------------------------------
