@@ -1,0 +1,46 @@
+library("ETAS")
+df.2 <- (df1[,c("time", "latitude", "longitude", "mag")])
+
+time_convert <- function(x){
+  dates <- strsplit(x$time, split = "T")
+  dates1<-unlist(dates)
+  k1<-seq(1, length(dates1), 2)
+  dates2<-dates1[k1]
+  dates3 <- unlist(strsplit(dates1[-k1], split = "Z"))
+  x$date <- dates2
+  x$time <- dates3
+  return(x)
+}
+
+nepal.data <- time_convert(df.2)
+colnames(nepal.data)[c(2,3)] <- c("lat", "long")
+tail(nepal.data)
+gregion <- list(lat = c(26.3, 26.3, 30.4, 30.4),
+                   long = c(79, 88.2, 88.2, 79))
+nepal.cat <- catalog(nepal.data, study.start = "1990-01-11",
+                      study.end = "2022-05-20", 
+                      region.poly = gregion, 
+                      mag.threshold = 5)
+plot(nepal.cat)
+
+param01 <- c(0.5, 0.2, 0.05, 2.7, 1.2, 0.02, 2.3, 0.03)
+
+nepal.fit <- etas(nepal.cat, param0 = param01)
+plot(nepal.fit)
+rates(nepal.fit)
+
+pr <- probs(nepal.fit)
+
+plot(nepal.cat$longlat.coord[pr$target & (1 - pr$prob > 0.95), 1:2])
+points(nepal.cat$longlat.coord[pr$target & (pr$prob > 0.95), 1:2],
+          pch = 3, col = 2)
+map("world", add = TRUE, col = "grey")
+legend("bottomleft", c("background", "triggered"), pch = c(1, 3),
+          col = 1:2)
+
+nepal.res <- resid.etas(nepal.fit)
+summary(nepal.res$tres)
+
+summary(na.omit(nepal.res$sres$z))
+
+ks.test(nepal.res$U, punif)
