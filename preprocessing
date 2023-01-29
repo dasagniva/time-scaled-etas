@@ -1,0 +1,81 @@
+depth_transform <- function(df1, mag.cutoff){
+  k<-(df1$mag > mag.cutoff)
+  n <- length(unique(cumsum(k)))
+  kk <- unique(cumsum(k))
+  depth_means <- NULL
+  for (i in 1:n)
+    depth_means[i] <- mean(df1$depth[(cumsum(k) == kk[i])])
+  final_depth <- rep(depth_means, table(cumsum(k)))
+  return(final_depth)
+}
+
+
+
+pp1 <- function(df1, mag.cutoff){
+  k<-(df1$mag > mag.cutoff)
+  df2 <- df1[k,c("time", "latitude", "longitude", "depth", "mag")]
+  dates <- strsplit(df1$time, split = "T")
+  dates1<-unlist(dates)
+  k1<-seq(1, length(dates1), 2)
+  dates2<-dates1[k1]
+  dates3 <- unlist(strsplit(dates1[-k1], split = "Z"))
+  dates4 <- unlist(strsplit(dates3, split = ":"))
+  
+  dates5 <- unlist(strsplit(dates2, split = "-"))
+  year <- as.numeric(dates5[seq(1, length(dates5), 3)])  
+  month <- as.numeric(dates5[seq(2, length(dates5), 3)])
+  day <- as.numeric(dates5[seq(3, length(dates5), 3)])
+  hr<-as.numeric(dates4[seq(1,length(dates4), 3)])
+  minut<-as.numeric(dates4[seq(2,length(dates4),3)])
+  second <- as.numeric(dates4[seq(3,length(dates4),3)])
+  
+  dd3 <- ifelse(month %in% c(1,3,5, 7, 8, 10, 12), 31, 
+                ifelse(month != 2, 30, 
+                       ifelse(year %% 4 == 0, 29, 28)))
+  dd2 <- ifelse(year %% 4 == 0, 366, 365)
+  time <- (year-1990)*24*dd2 + (month - 1)*24*dd3 + day*24 +  hr + (minut/60) + (second/3600)
+  time <- round(time,3)
+  df <- cbind.data.frame(time,
+                         "latitude" = df1$latitude,
+                         "longitude" = df1$longitude,
+                         "magnitude" = df1$mag,
+                         "depth" = depth_transform(df1, mag.cutoff))
+  return(df)
+}
+
+# function to implement the ideal time scale
+ideal_time_scale <- function(data) {
+  data$time <- data$time
+  return(data)
+}
+
+# function to implement the calibration time scale
+calibration_time_scale <- function(data, parameter) {
+  data$time <- data$time / parameter
+  return(data)
+}
+
+# function to implement the proportional hazards time scale
+proportional_hazards_time_scale <- function(data, variable) {
+  data$time <- data$time / data[[variable]]
+  return(data)
+}
+
+# function to implement the log-linear time scale
+log_linear_time_scale <- function(data) {
+  data$time <- log(data$time)
+  return(data)
+}
+
+# function to implement the power time scale
+power_time_scale <- function(data, parameter) {
+  data$time <- data$time^parameter
+  return(data)
+}
+
+
+time_scaled_data <- function(df, mag.cutoff, time_scale, ...){
+  df1 <- pp1(df, mag.cutoff)
+  df2 <- time_scale(df1, ...)
+  return(df2[,-5])
+}
